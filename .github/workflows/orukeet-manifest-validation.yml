@@ -1,0 +1,43 @@
+name: Orukeet manifest validation
+on:
+  push:
+    branches: [codex/taptalk-manifest-validation]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: macos-26
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: e0e9753635f89858dec48e6fc83406922f96ba6f
+      - name: Record source and toolchain
+        run: |
+          mkdir -p evidence
+          git rev-parse HEAD | tee evidence/head.txt
+          xcodebuild -version | tee evidence/xcode.txt
+          swift --version | tee evidence/swift.txt
+      - name: Run manifest regressions
+        run: |
+          set -o pipefail
+          swiftc -swift-version 6 -parse-as-library TapTalk/Services/OrukeetDownloadManifest.swift scripts/test-orukeet-manifest.swift -o /tmp/manifest-tests
+          /tmp/manifest-tests | tee evidence/manifest-tests.log
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build native Rust library and bindings
+        run: |
+          set -o pipefail
+          make bindings 2>&1 | tee evidence/rust-build.log
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Build complete app without signing
+        run: |
+          set -o pipefail
+          xcodebuild -project TapTalk.xcodeproj -scheme TapTalk -configuration Debug -derivedDataPath build ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO 2>&1 | tee evidence/xcode-build.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: taptalk-manifest-validation
+          path: evidence
+          retention-days: 14
