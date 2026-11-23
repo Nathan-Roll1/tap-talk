@@ -28,13 +28,56 @@ actor FourierEngine {
         defer { try? fm.removeItem(at: staged) }
         let address = "https://huggingface.co/oruk/oruk-fourier-2b/resolve/" + revision + "/" + file.filename
         guard let url = URL(string: address) else { throw URLError(.badURL) }
-        try await ZipDownloader.download(from: url, to: staged, progress: progress)
+        try await fetchWeights(from: url, to: staged, progress: progress)
         guard try file.matches(file: staged) else { throw URLError(.cannotDecodeContentData) }
         try Task.checkCancellation()
         if fm.fileExists(atPath: modelFile.path) {
             _ = try fm.replaceItemAt(modelFile, withItemAt: staged)
         } else {
             try fm.moveItem(at: staged, to: modelFile)
+        }
+    }
+
+    private static func fetchWeights(from url: URL, to target: URL,
+                                     progress: @escaping @Sendable (Double) -> Void) async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 45
+        config.timeoutIntervalForResource = 120
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+        let fm = FileManager.default
+        guard fm.createFile(atPath: target.path, contents: nil) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        let output = try FileHandle(forWritingTo: target)
+        defer { try? output.close() }
+        var offset: Int64 = 0
+        while offset < file.bytes {
+            try Task.checkCancellation()
+            let end = min(offset + 16 * 1024 * 1024, file.bytes) - 1
+            // A range-specific URL keeps CDN redirects for different ranges independent.
+            let partURL = url.appending(queryItems: [URLQueryItem(name: "part", value: String(offset))])
+            var request = URLRequest(url: partURL)
+            request.setValue("bytes=\(offset)-\(end)", forHTTPHeaderField: "Range")
+            request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
+            let (temp, response) = try await session.download(for: request)
+            defer { try? fm.removeItem(at: temp) }
+            guard let http = response as? HTTPURLResponse,
+                  let size = try temp.resourceValues(forKeys: [.fileSizeKey]).fileSize else {
+                throw URLError(.badServerResponse)
+            }
+            let whole = offset == 0 && http.statusCode == 200 && Int64(size) == file.bytes
+            let range = "bytes \(offset)-\(end)/\(file.bytes)"
+            guard whole || (http.statusCode == 206 && http.value(forHTTPHeaderField: "Content-Range") == range
+                            && Int64(size) == end - offset + 1) else { throw URLError(.badServerResponse) }
+            let input = try FileHandle(forReadingFrom: temp)
+            defer { try? input.close() }
+            while let chunk = try input.read(upToCount: 1024 * 1024), !chunk.isEmpty {
+                try Task.checkCancellation()
+                try output.write(contentsOf: chunk)
+            }
+            offset += Int64(size)
+            progress(Double(offset) / Double(file.bytes))
         }
     }
 
