@@ -1,7 +1,7 @@
 name: Build and compare TapTalk speech engines
 on:
   push:
-    branches: [qa/fourier-offline-comparison]
+    branches: [qa/fourier-system-paste]
 permissions:
   contents: read
 jobs:

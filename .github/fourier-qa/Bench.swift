@@ -71,6 +71,28 @@ enum FourierComparison {
         editor.paste(nil)
     }
 
+    static func externalReady(_ id: String) async throws {
+        try id.write(toFile: "/tmp/tap-external-request", atomically: true, encoding: .utf8)
+        let limit = Date().addingTimeInterval(15)
+        while Date() < limit {
+            if (try? String(contentsOfFile: "/tmp/tap-external-ready", encoding: .utf8)) == id { return }
+            try await Task.sleep(nanoseconds: 15_000_000)
+        }
+        throw NSError(domain: "External editor did not acquire focus", code: 5)
+    }
+
+    static func externalText(_ id: String, timeout: Double) async throws -> (UInt64, String) {
+        let limit = Date().addingTimeInterval(timeout)
+        while Date() < limit {
+            if let data = try? Data(contentsOf: URL(fileURLWithPath: "/tmp/tap-external-result")),
+               let record = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               record["trial"] as? String == id, let now = record["now"] as? NSNumber,
+               let text = record["text"] as? String { return (now.uint64Value, text) }
+            try await Task.sleep(nanoseconds: 15_000_000)
+        }
+        throw NSError(domain: "External editor did not receive Cmd-V; front=" + (NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "none") + " state=" + AppController.shared.state.status, code: 6)
+    }
+
     static func stage(_ name: String) {
         FileHandle.standardError.write(Data(("STAGE " + name + "\n").utf8))
     }
@@ -82,17 +104,12 @@ enum FourierComparison {
             stage("controller initialized")
             prepareEditor()
             stage("editor initialized, accessibility=" + String(AXIsProcessTrusted()))
-            // Both engines use the same editor-directed native paste for every timed take.
-            // A separate test run recorded the behavior of systemwide Cmd-V.
-            physicalPaste = false
-            editor.string = ""
-            PasteService.paste("Fixture paste preflight")
-            try await Task.sleep(nanoseconds: 250_000_000)
-            guard editor.string == "Fixture paste preflight" else {
-                throw NSError(domain: "Native editor paste calibration failed; editor=" + editor.string, code: 3)
-            }
-            stage("calibrated " + (physicalPaste ? "system Cmd-V" : "native in-process editor Paste"))
-            editor.string = ""
+            guard AXIsProcessTrusted() else { throw NSError(domain: "Global keyboard event permission unavailable", code: 4) }
+            try await externalReady("preflight")
+            PasteService.paste("External preflight")
+            let check = try await externalText("preflight", timeout: 7)
+            guard check.1 == "External preflight" else { throw CocoaError(.fileReadCorruptFile) }
+            stage("calibrated system Cmd-V into separate editor process")
             let file = try AVAudioFile(forReading: URL(fileURLWithPath: "/tmp/taptalk-speech.wav"),
                                        commonFormat: .pcmFormatFloat32, interleaved: false)
             guard file.processingFormat.sampleRate == 16_000, file.processingFormat.channelCount == 1,
@@ -141,27 +158,22 @@ enum FourierComparison {
                         modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
                         windowNumber: w.windowNumber, context: nil, characters: " ", charactersIgnoringModifiers: " ",
                         isARepeat: false, keyCode: 49) else { throw CocoaError(.coderInvalidValue) }
-                    w.makeKeyAndOrderFront(nil)
-                    w.makeFirstResponder(editor)
+                    let id = model.rawValue + String(i)
+                    try await externalReady(id)
                     w.sendEvent(ev)
                     guard editor.released > 0 else { throw NSError(domain: "AppKit failed to deliver key release", code: 1) }
-                    let deadline = Date().addingTimeInterval(75)
-                    while editor.inserted == 0 && Date() < deadline {
-                        if !editor.string.isEmpty { editor.inserted = DispatchTime.now().uptimeNanoseconds; break }
-                        try await Task.sleep(nanoseconds: 2_000_000)
-                    }
-                    guard editor.inserted > editor.released else {
-                        throw NSError(domain: "No editor insertion. state=" + c.state.status + " transcript=" + c.state.transcriptText + " editor=" + editor.string, code: 2)
-                    }
+                    let observed = try await externalText(id, timeout: 100)
+                    editor.inserted = observed.0
+                    let delivered = observed.1
                     let ms = Double(editor.inserted - editor.released) / 1_000_000
-                    rows.append(Row(model: model.rawValue, iteration: i, releaseToVisibleMS: ms, text: editor.string))
-                    print("MEASURE", model.rawValue, i, ms, editor.string)
+                    rows.append(Row(model: model.rawValue, iteration: i, releaseToVisibleMS: ms, text: delivered))
+                    print("MEASURE", model.rawValue, i, ms, delivered)
                     let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
                     try encoder.encode(rows).write(to: outputURL, options: .atomic)
                     try await Task.sleep(nanoseconds: 250_000_000)
                 }
             }
-            print("PASTE_TRANSPORT",physicalPaste ? "system Cmd-V" : "in-process AppKit paste action")
+            print("PASTE_TRANSPORT system Cmd-V to independent editor")
             exit(0)
         } catch {
             print("BENCH_ERROR",error)
