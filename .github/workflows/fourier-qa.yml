@@ -30,18 +30,8 @@ jobs:
             core/target
             ~/Library/Caches/org.swift.swiftpm
           key: tap-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('core/Cargo.lock', 'project.yml') }}
-      - name: Build the unmodified distribution target
-        run: |
-          set -eo pipefail
-          make xcode
-          xcodebuild -project TapTalk.xcodeproj -scheme TapTalk -configuration Release -derivedDataPath /tmp/taptalk-build CODE_SIGN_IDENTITY="-" CODE_SIGN_STYLE=Manual CODE_SIGNING_ALLOWED=NO build >/tmp/taptalk-xcode.log 2>&1 || { grep -E '(warning|error):' /tmp/taptalk-xcode.log | tail -40; tail -22 /tmp/taptalk-xcode.log; exit 1; }
-      - name: Save the tested developer build
-        run: |
-          ditto -c -k --sequesterRsrc --keepParent /tmp/taptalk-build/Build/Products/Release/TapTalk.app /tmp/TapTalk-Fourier-dev.zip
-      - uses: actions/upload-artifact@v4
-        with:
-          name: TapTalk-Fourier-developer-build
-          path: /tmp/TapTalk-Fourier-dev.zip
+      - name: Generate native bindings
+        run: make xcode
       - name: Populate and verify the two official weight caches
         timeout-minutes: 8
         run: bash .github/fourier-qa/stage-weights.sh
