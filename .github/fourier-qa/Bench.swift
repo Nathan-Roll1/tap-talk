@@ -92,7 +92,7 @@ enum FourierComparison {
             try await FourierEngine.download { value in FileHandle.standardError.write(Data(("Fourier downloaded " + String(Int(value * 100)) + "%\n").utf8)) }
             stage("Fourier verified")
             if !OrukeetEngine.isInstalled() {
-                try await OrukeetEngine.download { _ in }
+                if !OrukeetEngine.isDownloaded() { try await OrukeetEngine.download { _ in } }
                 stage("compiling Orukeet")
                 try await Task.detached { try OrukeetEngine.compile() }.value
             }

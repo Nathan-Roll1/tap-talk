@@ -1,7 +1,7 @@
 name: Build and compare TapTalk speech engines
 on:
   push:
-    branches: [qa/fourier-dictation]
+    branches: [qa/fourier-offline-comparison]
 permissions:
   contents: read
 jobs:
@@ -42,6 +42,9 @@ jobs:
         with:
           name: TapTalk-Fourier-developer-build
           path: /tmp/TapTalk-Fourier-dev.zip
+      - name: Populate and verify the two official weight caches
+        timeout-minutes: 8
+        run: bash .github/fourier-qa/stage-weights.sh
       - name: Compile instrumented editor target
         run: bash .github/fourier-qa/benchmark.sh
       - name: Start AppKit and check the first stage
