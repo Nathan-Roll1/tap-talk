@@ -65,10 +65,17 @@ enum FourierComparison {
         }
     }
 
+    static func stage(_ name: String) {
+        FileHandle.standardError.write(Data(("STAGE " + name + "\n").utf8))
+    }
+
     static func run() async {
+        stage("entered benchmark")
         do {
             let c = AppController.shared
+            stage("controller initialized")
             prepareEditor()
+            stage("editor initialized")
             let file = try AVAudioFile(forReading: URL(fileURLWithPath: "/tmp/taptalk-speech.wav"),
                                        commonFormat: .pcmFormatFloat32, interleaved: false)
             guard file.processingFormat.sampleRate == 16_000, file.processingFormat.channelCount == 1,
@@ -78,13 +85,18 @@ enum FourierComparison {
             guard let first = b.floatChannelData?.pointee else { throw CocoaError(.fileReadCorruptFile) }
             let samples = Array(UnsafeBufferPointer(start: first, count: Int(b.frameLength)))
             let store = VadModelStore(modelsDirectory: URL(fileURLWithPath: AppController.modelsDirectory()))
+            stage("installing VAD")
             try await store.install()
             try await c.recorder.loadVoiceActivity(modelURL: store.modelURL)
+            stage("downloading Fourier")
             try await FourierEngine.download { _ in }
+            stage("Fourier verified")
             if !OrukeetEngine.isInstalled() {
                 try await OrukeetEngine.download { _ in }
+                stage("compiling Orukeet")
                 try await Task.detached { try OrukeetEngine.compile() }.value
             }
+            stage("both models ready")
             let settings = SettingsStore.shared
             settings.streamingEnabled = false
             settings.llmEnabled = false
@@ -97,6 +109,7 @@ enum FourierComparison {
                 settings.localEngine = model
                 c.state.setModel(.ready)
                 for i in 0...10 {
+                    stage(model.rawValue + " take " + String(i))
                     editor.released = 0; editor.inserted = 0; editor.string = ""
                     c.startRecording(hotkey: true, smart: false)
                     try await Task.sleep(nanoseconds: 220_000_000)

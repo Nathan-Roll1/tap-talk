@@ -35,8 +35,35 @@ jobs:
           set -eo pipefail
           make xcode
           xcodebuild -project TapTalk.xcodeproj -scheme TapTalk -configuration Release -derivedDataPath /tmp/taptalk-build CODE_SIGN_IDENTITY="-" CODE_SIGN_STYLE=Manual CODE_SIGNING_ALLOWED=NO build >/tmp/taptalk-xcode.log 2>&1 || { grep -E '(warning|error):' /tmp/taptalk-xcode.log | tail -40; tail -22 /tmp/taptalk-xcode.log; exit 1; }
-      - name: Measure release to editor insertion on the same Mac
+      - name: Compile instrumented editor target
         run: bash .github/fourier-qa/benchmark.sh
+      - name: Start AppKit and check the first stage
+        run: |
+          nohup bash -c 'bash .github/fourier-qa/run-and-observe.sh; echo $? > /tmp/taptalk-status' >/tmp/taptalk-observer.log 2>&1 </dev/null &
+          for attempt in {1..30}; do
+            if grep -q 'STAGE' /tmp/taptalk-bench-run.log 2>/dev/null; then break; fi
+            sleep 2
+          done
+          cat /tmp/taptalk-bench-run.log || true
+          if ! grep -q 'STAGE' /tmp/taptalk-bench-run.log; then sample "$(cat /tmp/taptalk-bench-pid)" 2 10 -file /tmp/taptalk-sample.txt || true; exit 1; fi
+      - name: Verify both model installations
+        run: |
+          for attempt in {1..240}; do
+            if grep -q 'both models ready' /tmp/taptalk-bench-run.log; then exit 0; fi
+            if [ -f /tmp/taptalk-status ]; then break; fi
+            sleep 2
+          done
+          tail -30 /tmp/taptalk-bench-run.log
+          sample "$(cat /tmp/taptalk-bench-pid)" 2 10 -file /tmp/taptalk-sample.txt || true
+          exit 1
+      - name: Measure release to visible text for both engines
+        run: |
+          for attempt in {1..720}; do
+            if [ -f /tmp/taptalk-status ]; then cat /tmp/taptalk-bench-run.log; exit "$(cat /tmp/taptalk-status)"; fi
+            sleep 2
+          done
+          tail -40 /tmp/taptalk-bench-run.log
+          exit 1
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -46,3 +73,4 @@ jobs:
             /tmp/taptalk-xcode.log
             /tmp/taptalk-bench-build.log
             /tmp/taptalk-bench-run.log
+            /tmp/taptalk-sample.txt
