@@ -1,0 +1,37 @@
+name: Build and compare TapTalk speech engines
+on:
+  push:
+    branches: [qa/fourier-dictation]
+permissions:
+  contents: read
+jobs:
+  mac:
+    runs-on: macos-15
+    timeout-minutes: 55
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode and install XcodeGen
+        run: |
+          set -euo pipefail
+          xcode=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$xcode/Contents/Developer"
+          xcodebuild -version
+          test "$(uname -m)" = arm64
+          sysctl -n machdep.cpu.brand_string
+          command -v xcodegen || brew install xcodegen
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            core/target
+            ~/Library/Caches/org.swift.swiftpm
+          key: tap-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('core/Cargo.lock', 'project.yml') }}
+      - name: Build the unmodified distribution target
+        run: |
+          set -eo pipefail
+          make xcode
+          xcodebuild -project TapTalk.xcodeproj -scheme TapTalk -configuration Release -derivedDataPath /tmp/taptalk-build CODE_SIGN_IDENTITY="-" CODE_SIGN_STYLE=Manual CODE_SIGNING_ALLOWED=NO build >/tmp/taptalk-xcode.log 2>&1 || { grep -E '(warning|error):' /tmp/taptalk-xcode.log | tail -40; tail -22 /tmp/taptalk-xcode.log; exit 1; }
