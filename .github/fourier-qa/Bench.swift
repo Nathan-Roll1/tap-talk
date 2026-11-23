@@ -36,7 +36,7 @@ enum FourierComparison {
     static let editor = ReceivingEditor()
     static let outputURL = URL(fileURLWithPath: "/tmp/taptalk-result.json")
     static var window: NSWindow?
-    static let physicalPaste = AXIsProcessTrusted()
+    static var physicalPaste = false
     struct Row: Codable {
         let model: String
         let iteration: Int
@@ -51,6 +51,14 @@ enum FourierComparison {
         window = w
         w.title = "TapTalk test editor"
         w.contentView = editor
+        let bar = NSMenu()
+        let appItem = NSMenuItem(); bar.addItem(appItem); appItem.submenu = NSMenu(title: "Benchmark")
+        let editItem = NSMenuItem(); bar.addItem(editItem)
+        let edit = NSMenu(title: "Edit"); editItem.submenu = edit
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        NSApp.mainMenu = bar
+        editor.isEditable = true
+        editor.isSelectable = true
         editor.isRichText = false
         editor.isAutomaticQuoteSubstitutionEnabled = false
         w.makeKeyAndOrderFront(nil)
@@ -60,9 +68,7 @@ enum FourierComparison {
 
     static func deliverInAppPaste() {
         // Used only where the runner has no global event permission.
-        guard NSApp.sendAction(#selector(NSText.paste(_:)), to: editor, from: nil) else {
-            fatalError("AppKit did not route Paste")
-        }
+        editor.paste(nil)
     }
 
     static func stage(_ name: String) {
@@ -75,7 +81,23 @@ enum FourierComparison {
             let c = AppController.shared
             stage("controller initialized")
             prepareEditor()
-            stage("editor initialized")
+            stage("editor initialized, accessibility=" + String(AXIsProcessTrusted()))
+            if AXIsProcessTrusted() {
+                physicalPaste = true
+                PasteService.paste("TapTalk preflight")
+                try await Task.sleep(nanoseconds: 650_000_000)
+                physicalPaste = editor.string == "TapTalk preflight"
+            }
+            if !physicalPaste {
+                editor.string = ""
+                PasteService.paste("Fixture paste preflight")
+                try await Task.sleep(nanoseconds: 250_000_000)
+                guard editor.string == "Fixture paste preflight" else {
+                    throw NSError(domain: "Native editor paste calibration failed; editor=" + editor.string, code: 3)
+                }
+            }
+            stage("calibrated " + (physicalPaste ? "system Cmd-V" : "native in-process editor Paste"))
+            editor.string = ""
             let file = try AVAudioFile(forReading: URL(fileURLWithPath: "/tmp/taptalk-speech.wav"),
                                        commonFormat: .pcmFormatFloat32, interleaved: false)
             guard file.processingFormat.sampleRate == 16_000, file.processingFormat.channelCount == 1,
@@ -129,8 +151,13 @@ enum FourierComparison {
                     w.sendEvent(ev)
                     guard editor.released > 0 else { throw NSError(domain: "AppKit failed to deliver key release", code: 1) }
                     let deadline = Date().addingTimeInterval(75)
-                    while editor.inserted == 0 && Date() < deadline { try await Task.sleep(nanoseconds: 20_000_000) }
-                    guard editor.inserted > editor.released else { throw NSError(domain: "No editor insertion, " + c.state.status, code: 2) }
+                    while editor.inserted == 0 && Date() < deadline {
+                        if !editor.string.isEmpty { editor.inserted = DispatchTime.now().uptimeNanoseconds; break }
+                        try await Task.sleep(nanoseconds: 2_000_000)
+                    }
+                    guard editor.inserted > editor.released else {
+                        throw NSError(domain: "No editor insertion. state=" + c.state.status + " transcript=" + c.state.transcriptText + " editor=" + editor.string, code: 2)
+                    }
                     let ms = Double(editor.inserted - editor.released) / 1_000_000
                     rows.append(Row(model: model.rawValue, iteration: i, releaseToVisibleMS: ms, text: editor.string))
                     print("MEASURE", model.rawValue, i, ms, editor.string)
