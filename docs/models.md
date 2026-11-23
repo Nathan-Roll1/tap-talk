@@ -19,6 +19,7 @@ download accounting. Cached model loads and transcription make no such requests.
 |---|---|---|---|---|
 | **NVIDIA Parakeet TDT 0.6B v3** | Fallback / live-typing base - English + 24 European | ~490 MB | Core ML / ANE via FluidAudio | CC-BY-4.0 |
 | **Orukeet r3** | Default ASR for new installs - English + 24 European | ~467 MB | Core ML / ANE, 6-bit LUT/FP16 greedy, compiled on device | CC-BY-SA-4.0 |
+| **Oruk Fourier 2B** | Optional English push-to-talk dictation | 2.19 GB | TranscribeCpp, Q8_0 GGUF | CC BY-NC 4.0 |
 | **NVIDIA Nemotron 3.5 ASR Multilingual 0.6B** | ASR - Hindi + 100 languages | ~640 MB | Core ML / ANE via FluidAudio | OpenMDW-1.1 |
 | **NVIDIA Parakeet Realtime EOU 120M** | Live typing (optional) | ~440 MB | Core ML / ANE via FluidAudio | NVIDIA Open Model License |
 | **Silero VAD v6 (32 ms Core ML)** | Silence trimming before recognition | ~0.9 MB | Core ML, CPU (Core ML places no Silero op on the ANE) | MIT |
@@ -30,6 +31,12 @@ The FluidAudio rows run on FluidAudio 0.18.4.
 Memory is much lower than disk size suggests, because Core ML weights and the GGUF are
 memory-mapped: the app sits at ~164 MB with Parakeet loaded, and `llama-server` at ~279 MB
 footprint against a 1.06 GB file.
+
+### Using Fourier
+
+Open **Models**, find **Oruk Fourier 2B** and select **Download**. If another model is selected, choose the control to switch to Fourier after the download. Hold the dictation hotkey, speak English, then release it to paste into the focused text field. Live typing still uses its own streaming recognizer.
+
+The first download goes directly to the [publisher's model card](https://huggingface.co/oruk/oruk-fourier-2b) and is checked against the pinned size and SHA-256. Later dictations use the local file. Choose **Remove** on the card to delete it. The weights are licensed for noncommercial use.
 
 ## Why these, specifically
 
