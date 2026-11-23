@@ -147,13 +147,17 @@ enum FourierComparison {
                     editor.released = 0; editor.inserted = 0; editor.string = ""
                     c.startRecording(hotkey: true, smart: false)
                     try await Task.sleep(nanoseconds: 220_000_000)
-                    for off in stride(from: 0, to: samples.count, by: 320) {
-                        let end = min(off + 320, samples.count)
-                        samples.withUnsafeBufferPointer { ptr in
-                            capture.ring.writer.write(UnsafeBufferPointer(rebasing: ptr[off..<end]))
+                    try await Task.detached(priority: .userInitiated) {
+                        let clock = ContinuousClock()
+                        let onset = clock.now
+                        for off in stride(from: 0, to: samples.count, by: 320) {
+                            let end = min(off + 320, samples.count)
+                            samples.withUnsafeBufferPointer { ptr in
+                                capture.ring.writer.write(UnsafeBufferPointer(rebasing: ptr[off..<end]))
+                            }
+                            try await clock.sleep(until: onset.advanced(by: .microseconds(end * 1_000_000 / 16_000)))
                         }
-                        try await Task.sleep(nanoseconds: 20_000_000)
-                    }
+                    }.value
                     guard let w = window, let ev = NSEvent.keyEvent(with: .keyUp, location: .zero,
                         modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
                         windowNumber: w.windowNumber, context: nil, characters: " ", charactersIgnoringModifiers: " ",
