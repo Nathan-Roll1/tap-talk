@@ -10,6 +10,9 @@ packages:
     url: https://github.com/FluidInference/FluidAudio.git
     exactVersion: "0.18.4"
     traits: []
+  TranscribeCpp:
+    url: https://github.com/Beingpax/Transcribe-cpp-swift.git
+    revision: fb1c1ad99e8939a69fcfb613417d9635fb77ef42
   OrukeetCoreML:
     path: TapTalk/Vendor/OrukeetCoreML
   TapTalkAudio:
@@ -25,6 +28,8 @@ targets:
     platform: macOS
     dependencies:
       - package: FluidAudio
+      - package: TranscribeCpp
+        product: TranscribeCpp
       - package: OrukeetCoreML
         product: OrukeetCoreML
       - package: TapTalkAudio

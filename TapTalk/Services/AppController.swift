@@ -16,6 +16,7 @@ final class AppController: ObservableObject {
     private(set) lazy var recorder = DictationRecorder()
     let parakeet    = ParakeetEngine()
     let nemotron    = NemotronEngine()
+    let fourier     = FourierEngine()
     let orukeet     = OrukeetEngine()
     let manager:      ModelManager
 
@@ -339,13 +340,14 @@ final class AppController: ObservableObject {
     // Engine preference order, used ONLY as the first-launch default and the fallback when
     // the active engine is removed. An explicit pick (a download or a Settings choice) is
     // remembered and wins over this order.
-    static let enginePriority: [LocalEngine] = [.orukeet, .parakeet, .nemotron]
+    static let enginePriority: [LocalEngine] = [.orukeet, .parakeet, .nemotron, .fourier]
 
     nonisolated static func isInstalled(_ engine: LocalEngine) -> Bool {
         switch engine {
         case .parakeet: return ParakeetEngine.isInstalled()
         case .nemotron: return NemotronEngine.isInstalled()
         case .orukeet:  return OrukeetEngine.isInstalled()
+        case .fourier:  return FourierEngine.isInstalled()
         }
     }
 
@@ -378,13 +380,14 @@ final class AppController: ObservableObject {
         refresh()
     }
 
-    private enum ActiveEngine { case parakeet, nemotron, orukeet, none }
+    private enum ActiveEngine { case parakeet, nemotron, orukeet, fourier, none }
 
     private enum EnginePlan {
         case cloud
         case parakeet
         case nemotron
         case orukeet
+        case fourier
         case unavailable(status: String)
     }
 
@@ -399,6 +402,7 @@ final class AppController: ObservableObject {
         case .parakeet:           state.setModel(.loading); state.status = "Loading \(LocalEngine.parakeet.displayName)..."
         case .nemotron:           state.setModel(.loading); state.status = "Loading \(LocalEngine.nemotron.displayName)..."
         case .orukeet:            state.setModel(.loading); state.status = "Loading \(LocalEngine.orukeet.displayName)..."
+        case .fourier:            state.setModel(.loading); state.status = "Loading \(LocalEngine.fourier.displayName)..."
         case .unavailable(let s): state.setModel(.none);    state.status = s
         }
 
@@ -431,6 +435,10 @@ final class AppController: ObservableObject {
             return OrukeetEngine.isInstalled()
                 ? .orukeet
                 : .unavailable(status: "\(LocalEngine.orukeet.displayName) not installed - download it in Models")
+        case .fourier:
+            return FourierEngine.isInstalled()
+                ? .fourier
+                : .unavailable(status: "\(LocalEngine.fourier.displayName) not installed - download it in Models")
         }
     }
 
@@ -439,6 +447,7 @@ final class AppController: ObservableObject {
         case .parakeet:            await releaseEngines(keep: .parakeet)
         case .nemotron:            await releaseEngines(keep: .nemotron)
         case .orukeet:             await releaseEngines(keep: .orukeet)
+        case .fourier:             await releaseEngines(keep: .fourier)
         case .cloud, .unavailable: await releaseEngines(keep: .none)
         }
         guard await isCurrentGeneration(gen) else { return }
@@ -467,6 +476,13 @@ final class AppController: ObservableObject {
             } catch {
                 await finishLoad(gen, model: .none, status: "\(LocalEngine.orukeet.displayName) failed: \(error.localizedDescription)")
             }
+        case .fourier:
+            do {
+                try await fourier.ensureLoaded()
+                await finishLoad(gen, model: .ready, status: "\(LocalEngine.fourier.displayName) ready")
+            } catch {
+                await finishLoad(gen, model: .none, status: "\(LocalEngine.fourier.displayName) failed: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -474,6 +490,7 @@ final class AppController: ObservableObject {
     private func releaseEngines(keep: ActiveEngine) async {
         if keep != .parakeet { await parakeet.unload() }
         if keep != .nemotron { await nemotron.unload() }
+        if keep != .fourier { await fourier.unload() }
         if keep != .orukeet { await orukeet.unload() }
     }
 
@@ -839,6 +856,9 @@ final class AppController: ObservableObject {
                 } else if localEngine == .nemotron {
                     let out = try await self.nemotron.transcribe(samples: audio.samples, language: lang)
                     result = TranscriptionResult(text: out.text, language: out.language, durationMs: out.processingMs)
+                } else if localEngine == .fourier {
+                    let out = try await self.fourier.transcribe(samples: audio.samples)
+                    result = TranscriptionResult(text: out.text, language: "en", durationMs: out.processingMs)
                 } else if localEngine == .orukeet {
                     let out = try await self.orukeet.transcribe(samples: audio.samples)
                     // Orukeet auto-detects (EU); do not fabricate a specific language label.

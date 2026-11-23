@@ -80,3 +80,7 @@ Two consequences, both accepted deliberately:
   download works, so this is not purely hypothetical.
 
 Revisit if either upstream repo changes access terms.
+
+## Optional Oruk Fourier 2B
+
+The English Q8 GGUF is downloaded directly from [Oruk](https://huggingface.co/oruk/oruk-fourier-2b) on explicit request. The weights are CC BY-NC 4.0. Commercial use requires separate permission from Oruk. The app verifies the file size and SHA-256 before it offers the model for use.

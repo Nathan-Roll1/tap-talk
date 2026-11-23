@@ -133,6 +133,8 @@ struct RecordView: View {
                 engineChip(LocalEngine.parakeet.displayName, icon: "bolt.fill")
             case .nemotron:
                 engineChip(LocalEngine.nemotron.displayName, icon: "globe")
+            case .fourier:
+                engineChip(LocalEngine.fourier.displayName, icon: "waveform")
             case .orukeet:
                 engineChip(LocalEngine.orukeet.displayName, icon: "waveform")
             }

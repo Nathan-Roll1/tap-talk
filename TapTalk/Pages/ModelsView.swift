@@ -17,6 +17,7 @@ struct ModelsView: View {
 
                 groupLabel("Speech")
                 OrukeetCard()
+                FourierCard()
                 ParakeetCard()
                 NemotronCard()
                 CloudCard()

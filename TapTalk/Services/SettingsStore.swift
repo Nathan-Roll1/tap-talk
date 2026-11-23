@@ -11,6 +11,7 @@ enum TranscriptionEngine: String {
 enum LocalEngine: String, CaseIterable {
     case parakeet     // FluidAudio / NVIDIA Parakeet (English/EU, punctuation)
     case nemotron     // FluidAudio / NVIDIA Nemotron 3.5 multilingual (Hindi and beyond)
+    case fourier
     case orukeet      // OrukeetCoreML / Orukeet r3 (English/EU, batch, more accurate than Parakeet)
 
     /// Model name, credited rather than described. Both engines are multilingual - they simply
@@ -20,6 +21,7 @@ enum LocalEngine: String, CaseIterable {
         case .parakeet: return "Parakeet TDT"
         case .nemotron: return "Nemotron 3.5"
         case .orukeet:  return "Orukeet"
+        case .fourier:  return "Oruk Fourier 2B"
         }
     }
 
@@ -29,6 +31,7 @@ enum LocalEngine: String, CaseIterable {
         case .parakeet: return "English + 24 European"
         case .nemotron: return "Hindi + 100 languages"
         case .orukeet:  return "English + 24 European"
+        case .fourier:  return "English"
         }
     }
 
@@ -39,6 +42,7 @@ enum LocalEngine: String, CaseIterable {
         case .parakeet: return false
         case .nemotron: return true
         case .orukeet:  return false
+        case .fourier:  return false
         }
     }
 
@@ -48,6 +52,7 @@ enum LocalEngine: String, CaseIterable {
         case .parakeet: return "Auto - EU"
         case .nemotron: return "Auto"
         case .orukeet:  return "Auto - EU"
+        case .fourier:  return "English"
         }
     }
 
@@ -58,6 +63,7 @@ enum LocalEngine: String, CaseIterable {
         case .parakeet: return true   // Parakeet + EOU realtime endpointing model
         case .nemotron: return false  // batch only here; the EOU add-on is Parakeet-specific
         case .orukeet:  return false  // no streaming Orukeet; live typing stays on Parakeet + EOU
+        case .fourier:  return false
         }
     }
 
@@ -68,6 +74,7 @@ enum LocalEngine: String, CaseIterable {
         case .parakeet: return []
         case .nemotron: return NemotronEngine.supportedLanguages
         case .orukeet:  return []
+        case .fourier:  return []
         }
     }
 }
