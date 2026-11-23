@@ -56,7 +56,12 @@ final class Receiver: NSObject, NSApplicationDelegate {
         }
     }
 }
-let app = NSApplication.shared
-let receiver = Receiver()
-app.delegate = receiver
-app.run()
+@main
+enum EditorMain {
+    @MainActor static func main() {
+        let app = NSApplication.shared
+        let receiver = Receiver()
+        app.delegate = receiver
+        withExtendedLifetime(receiver) { app.run() }
+    }
+}

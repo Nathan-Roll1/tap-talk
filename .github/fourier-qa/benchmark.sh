@@ -30,7 +30,7 @@ xcodebuild -project TapTalk.xcodeproj -scheme TapTalk -configuration Release -de
 
 
 mkdir -p /tmp/FixtureEditor.app/Contents/MacOS
-swiftc -O .github/fourier-qa/Editor.swift -o /tmp/FixtureEditor.app/Contents/MacOS/FixtureEditor
+swiftc -O -parse-as-library .github/fourier-qa/Editor.swift -o /tmp/FixtureEditor.app/Contents/MacOS/FixtureEditor
 /usr/libexec/PlistBuddy -c 'Add :CFBundleIdentifier string ai.oruk.test.fixture-editor' -c 'Add :CFBundleExecutable string FixtureEditor' -c 'Add :CFBundlePackageType string APPL' -c 'Add :CFBundleName string FixtureEditor' /tmp/FixtureEditor.app/Contents/Info.plist
 codesign --force --sign - /tmp/FixtureEditor.app
 nohup caffeinate -dimsu >/tmp/tap-caffeinate.log 2>&1 </dev/null &
