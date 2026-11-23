@@ -82,19 +82,14 @@ enum FourierComparison {
             stage("controller initialized")
             prepareEditor()
             stage("editor initialized, accessibility=" + String(AXIsProcessTrusted()))
-            if AXIsProcessTrusted() {
-                physicalPaste = true
-                PasteService.paste("TapTalk preflight")
-                try await Task.sleep(nanoseconds: 650_000_000)
-                physicalPaste = editor.string == "TapTalk preflight"
-            }
-            if !physicalPaste {
-                editor.string = ""
-                PasteService.paste("Fixture paste preflight")
-                try await Task.sleep(nanoseconds: 250_000_000)
-                guard editor.string == "Fixture paste preflight" else {
-                    throw NSError(domain: "Native editor paste calibration failed; editor=" + editor.string, code: 3)
-                }
+            // Both engines use the same editor-directed native paste for every timed take.
+            // A separate test run recorded the behavior of systemwide Cmd-V.
+            physicalPaste = false
+            editor.string = ""
+            PasteService.paste("Fixture paste preflight")
+            try await Task.sleep(nanoseconds: 250_000_000)
+            guard editor.string == "Fixture paste preflight" else {
+                throw NSError(domain: "Native editor paste calibration failed; editor=" + editor.string, code: 3)
             }
             stage("calibrated " + (physicalPaste ? "system Cmd-V" : "native in-process editor Paste"))
             editor.string = ""
