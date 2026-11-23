@@ -89,7 +89,7 @@ enum FourierComparison {
             try await store.install()
             try await c.recorder.loadVoiceActivity(modelURL: store.modelURL)
             stage("downloading Fourier")
-            try await FourierEngine.download { _ in }
+            try await FourierEngine.download { value in FileHandle.standardError.write(Data(("Fourier downloaded " + String(Int(value * 100)) + "%\n").utf8)) }
             stage("Fourier verified")
             if !OrukeetEngine.isInstalled() {
                 try await OrukeetEngine.download { _ in }
